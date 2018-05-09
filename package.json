@@ -1,136 +1,137 @@
 {
-	"name": "vue-view",
-	"displayName": "vue view",
-	"description": "",
-	"version": "0.0.1",
-	"publisher": "bhoold",
-    "homepage": "https://github.com/bhoold/vscode-vue-view",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/bhoold/vscode-vue-view"
-    },
-	"engines": {
-		"vscode": "^1.23.0"
-	},
-	"categories": [
-		"Other"
-	],
-	"activationEvents": [
-		"onView:vueView"
-	],
-	"main": "./src/extension",
-	"contributes": {
-		"views": {
-			"explorer": [
-				{
-					"id": "vueView",
-					"name": "vue view",
-					"when": "resourceLangId == vue"
-				}
-			]
-		},
-		"commands": [
-            {
-                "command": "vueView.refresh",
-                "title": "Refresh vue view",
-                "icon": {
-                    "dark": "resources/dark/icon-refresh.svg",
-                    "light": "resources/light/icon-refresh.svg"
-                }
-            },
-            {
-                "command": "vueView.revealCurrentSymbol",
-                "title": "Show in vue view"
-            }
-		],
-		"menus": {
-            "view/title": [
-                {
-                    "command": "vueView.refresh",
-                    "when": "view == vueView",
-                    "group": "navigation"
-                }
-            ],
-            "editor/context": [
-                {
-                    "command": "vueView.revealCurrentSymbol",
-                    "group": "navigation"
-                }
-            ]
-		},
-        "configuration": {
-            "type": "object",
-            "title": "Vue View configuration",
-            "properties": {
-                "vueView.doSort": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Sort the outline"
-                },
-                "vueView.expandNodes": {
-                    "type": "array",
-                    "default": [
-                        "Module",
-                        "Class",
-                        "Interface",
-                        "Namespace",
-                        "Object",
-                        "Package",
-                        "Struct"
-                    ],
-                    "description": "Kinds of nodes to be expanded automatically."
-                },
-                "vueView.sortOrder": {
-                    "type": "array",
-                    "default": [
-                        "Class",
-                        "Module",
-                        "Constant",
-                        "Interface",
-                        "*",
-                        "Constructor",
-                        "Function",
-                        "Method"
-                    ],
-                    "description": "Order to the sort symbols in, if sorted.  * is placeholder for all symbols not explicitly listed."
-                },
-                "vueView.topLevel": {
-                    "type": "array",
-                    "default": [
-						"Array",
-						"Boolean",
-						"Class",
-						"Constant",
-						"Constructor",
-						"Field",
-						"Function",
-						"Key",
-						"Method",
-						"Null",
-						"Number",
-						"Object",
-						"String",
-						"Variable"
-                    ],
-                    "description": "Which symbols to include at the topmost scope.  * includes everything."
-                }
-            }
+  "name": "vue-view",
+  "displayName": "vue view",
+  "description": "",
+  "version": "0.0.1",
+  "publisher": "bhoold",
+  "homepage": "https://github.com/bhoold/vscode-vue-view",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bhoold/vscode-vue-view"
+  },
+  "engines": {
+    "vscode": "^1.23.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:vueView"
+  ],
+  "main": "./src/extension",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "vueView",
+          "name": "vue view",
+          "when": "resourceLangId == vue"
         }
-	},
-	"scripts": {
-		"postinstall": "node ./node_modules/vscode/bin/install",
-		"test": "node ./node_modules/vscode/bin/test"
-	},
-	"devDependencies": {
-		"typescript": "^2.5.2",
-		"vscode": "^1.1.5",
-		"mocha": "^3.5.0",
-		"eslint": "^4.6.1",
-		"@types/node": "^7.0.0",
-		"@types/mocha": "^2.2.42"
-	},
-	"dependencies": {
-		"esprima": "^4.0.0",
-		"lodash": "^4.17.10"
-	}
+      ]
+    },
+    "commands": [
+      {
+        "command": "vueView.refresh",
+        "title": "Refresh vue view",
+        "icon": {
+          "dark": "resources/dark/icon-refresh.svg",
+          "light": "resources/light/icon-refresh.svg"
+        }
+      },
+      {
+        "command": "vueView.revealCurrentSymbol",
+        "title": "Show in vue view"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vueView.refresh",
+          "when": "view == vueView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "vueView.revealCurrentSymbol",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Vue View configuration",
+      "properties": {
+        "vueView.doSort": {
+          "type": "boolean",
+          "default": false,
+          "description": "Sort the outline"
+        },
+        "vueView.expandNodes": {
+          "type": "array",
+          "default": [
+            "Module",
+            "Class",
+            "Interface",
+            "Namespace",
+            "Object",
+            "Package",
+            "Struct"
+          ],
+          "description": "Kinds of nodes to be expanded automatically."
+        },
+        "vueView.sortOrder": {
+          "type": "array",
+          "default": [
+            "Class",
+            "Module",
+            "Constant",
+            "Interface",
+            "*",
+            "Constructor",
+            "Function",
+            "Method"
+          ],
+          "description": "Order to the sort symbols in, if sorted.  * is placeholder for all symbols not explicitly listed."
+        },
+        "vueView.topLevel": {
+          "type": "array",
+          "default": [
+            "Array",
+            "Boolean",
+            "Class",
+            "Constant",
+            "Constructor",
+            "Field",
+            "Function",
+            "Key",
+            "Method",
+            "Null",
+            "Number",
+            "Object",
+            "String",
+            "Variable"
+          ],
+          "description": "Which symbols to include at the topmost scope.  * includes everything."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "postinstall": "node ./node_modules/vscode/bin/install",
+    "test": "node ./node_modules/vscode/bin/test"
+  },
+  "devDependencies": {
+    "typescript": "^2.5.2",
+    "vscode": "^1.1.5",
+    "mocha": "^3.5.0",
+    "eslint": "^4.6.1",
+    "@types/node": "^7.0.0",
+    "@types/mocha": "^2.2.42"
+  },
+  "dependencies": {
+    "acorn": "^5.5.3",
+    "esprima": "^4.0.0",
+    "lodash": "^4.17.10"
+  }
 }

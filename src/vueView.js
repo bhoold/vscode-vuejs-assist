@@ -1,6 +1,8 @@
 const vscode = require('vscode');
 const icons = require('./icons');
 const _ = require('lodash');
+//const esprima = require('esprima')
+const acorn = require('acorn')
 
 let optsSortOrder = [],
 	optsTopLevel = [],
@@ -72,7 +74,8 @@ class SymbolOutlineTreeDataProvider {
 		if(element){
 			return element.children;
 		}else{
-			await this.updateSymbols(vscode.window.activeTextEditor);
+			//await this.updateSymbols(vscode.window.activeTextEditor);
+			await this.updateSymbolsBySelf(vscode.window.activeTextEditor);
 			return this.tree ? this.tree.children : [];
 		}
 	}
@@ -132,7 +135,7 @@ class SymbolOutlineTreeDataProvider {
 			let symbols = await this.getSymbols(editor.document);
 			if (optsTopLevel.indexOf(-1) < 0) {
 				symbols = symbols.filter(sym => optsTopLevel.indexOf(sym.kind) >= 0);
-			}
+			}console.log(vscode)
 			const symbolNodes = symbols.map(symbol => new SymbolNode(symbol));
 			symbolNodes.sort(this.compareSymbols);
 			let potentialParents = [];
@@ -168,6 +171,120 @@ class SymbolOutlineTreeDataProvider {
 			return node;
 		}
 	}
+
+	async updateSymbolsBySelf (editor) {
+		const tree = new SymbolNode();
+		this.editor = editor;
+		if(editor && editor.document.languageId == "vue"){
+			readOpts();
+			let symbols = await this.getSymbols(editor.document);
+
+			_.each(symbols, item => {
+				if(item.name == "script"){
+					let symbolNode = new SymbolNode(item);
+					tree.addChild(symbolNode);
+					return false;
+				}
+			});
+
+			//symbol结构
+			//let symbol = new vscode.SymbolInformation("aaa", vscode.SymbolKind.Method, "script", new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6))))
+			let scriptSymbolNode = null;
+			if(tree.children[0]){//children[0]是script标签
+				scriptSymbolNode = tree.children[0];
+			}
+			
+
+			//使用acorn解析
+			let scriptSymbol = null;
+			let scriptText = "";
+			let ast = null;
+			
+			_.each(symbols, item => {
+				if(item.name == "script"){
+					scriptSymbol = item;
+					scriptText = editor.document.getText(item.location.range);
+					scriptText = scriptText.slice(scriptText.indexOf('>') + 1, scriptText.lastIndexOf('</'));
+					try{
+						ast = acorn.parse(scriptText,{
+							sourceType: 'module',
+							ranges: true
+						})
+					}catch(e){
+						console.log(e)
+					}
+					return false;
+				}
+			});
+			if(ast){
+				_.each(ast.body, item => {
+					switch(item.type){
+						case "VariableDeclaration":
+							_.each(item.declarations, item2 => {
+								if(item2.type == "VariableDeclarator"){
+									if(item2.id){
+										if(item2.id.type == "Identifier"){
+											let name = item2.id.name,
+												kind = vscode.SymbolKind.Variable;
+											let symbol = null,
+												symbolNode = null;
+											let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6)));
+
+											//判断值类型
+											switch(item2.init.type){
+												case "Literal": //字面量
+												case "Identifier": //变量
+													kind = vscode.SymbolKind.Variable;
+													break;
+												case "ArrayExpression": //数组
+													kind = vscode.SymbolKind.Array;
+													break;
+												case "ObjectExpression": //对象
+													kind = vscode.SymbolKind.Object;
+													symbol = new vscode.SymbolInformation(name, kind, "script", position)
+													symbolNode = new SymbolNode(symbol);
+													_.each(item2.init.properties, item3 => {
+														if(item3.type == "Property"){
+															let keyName = item3.key.name,
+																keyKind = vscode.SymbolKind.Variable,
+																childSymbol = null,
+																childSymbolNode = null;
+															switch(item3.value.type){
+																case "Literal": //字面量
+																case "Identifier": //变量
+																	keyKind = vscode.SymbolKind.Variable;
+																	break;
+															}
+															childSymbol = new vscode.SymbolInformation(keyName, keyKind, name, position)
+															childSymbolNode = new SymbolNode(childSymbol);
+															symbolNode.addChild(childSymbolNode);
+														}
+													});
+													break;
+												case "FunctionExpression": //函数
+													kind = vscode.SymbolKind.Function;
+													break;
+											}
+											
+											if(!symbolNode){
+												symbol = new vscode.SymbolInformation(name, kind, "script", position)
+												symbolNode = new SymbolNode(symbol);
+											}
+											scriptSymbolNode && scriptSymbolNode.addChild(symbolNode);
+										}
+									}
+								}
+							});
+							break;
+					}
+				});
+				console.log(ast.body)
+			}
+		}
+		this.tree = tree;
+	}
+
+
 }
 
 class SymbolOutlineProvider {
