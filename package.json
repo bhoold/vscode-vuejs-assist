@@ -3,7 +3,7 @@
 	"displayName": "vue view",
 	"description": "",
 	"version": "0.0.1",
-	"publisher": "mo",
+	"publisher": "bhoold",
     "homepage": "https://github.com/bhoold/vscode-vue-view",
     "repository": {
         "type": "git",
