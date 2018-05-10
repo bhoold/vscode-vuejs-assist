@@ -189,9 +189,11 @@ class SymbolOutlineTreeDataProvider {
 
 			//symbol结构
 			//let symbol = new vscode.SymbolInformation("aaa", vscode.SymbolKind.Method, "script", new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6))))
-			let scriptSymbolNode = null;
-			if(tree.children[0]){//children[0]是script标签
-				scriptSymbolNode = tree.children[0];
+			let parentNode = null;
+			if(_.isArray(tree.children) && tree.children[0]){//children[0]是script标签
+				parentNode = tree.children[0];
+			}else{
+				parentNode = tree;
 			}
 			
 
@@ -217,6 +219,8 @@ class SymbolOutlineTreeDataProvider {
 				}
 			});
 			if(ast){
+				let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6)));
+				/*
 				_.each(ast.body, item => {
 					switch(item.type){
 						case "VariableDeclaration":
@@ -228,7 +232,7 @@ class SymbolOutlineTreeDataProvider {
 												kind = vscode.SymbolKind.Variable;
 											let symbol = null,
 												symbolNode = null;
-											let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6)));
+											
 
 											//判断值类型
 											switch(item2.init.type){
@@ -276,11 +280,216 @@ class SymbolOutlineTreeDataProvider {
 								}
 							});
 							break;
+						case "ExportDefaultDeclaration":
+							if(item.declaration){
+								switch(item.declaration.type){
+									case "ObjectExpression":
+										let kind = vscode.SymbolKind.Object;
+										let symbol = new vscode.SymbolInformation("export.default", kind, "script", position)
+										let symbolNode = new SymbolNode(symbol);
+
+										_.each(item.declaration.properties, item2 => {
+											if(item2.type == "Property"){
+												let keyName = item2.key.name,
+													keyKind = vscode.SymbolKind.Variable,
+													childSymbol = null,
+													childSymbolNode = null;
+												switch(item2.value.type){
+													case "Literal": //字面量
+													case "Identifier": //变量
+														keyKind = vscode.SymbolKind.Variable;
+														break;
+												}
+												childSymbol = new vscode.SymbolInformation(keyName, keyKind, name, position)
+												childSymbolNode = new SymbolNode(childSymbol);
+												symbolNode.addChild(childSymbolNode);
+											}
+										});
+
+
+										scriptSymbolNode && scriptSymbolNode.addChild(symbolNode);
+
+								}
+							}
+							break;
 					}
 				});
+				*/
+
+				declarationParser(ast.body, parentNode);
+
+				function declarationParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						//console.log("item.type: ", item.type);
+						//console.log(item)
+						switch(item.type){
+							case "VariableDeclaration":
+								//console.log(item.kind) // "var" | "let" | "const"
+								declaratorParser(item.declarations, parentNode);
+								break;
+							case "FunctionDeclaration":
+								//expressionOrValueParser(item, parentNode);
+								let name = idOrKeyOrParamParser(item.id);
+								let kind = vscode.SymbolKind.Function;
+								let node = null;
+								if(name && kind && parentNode){
+									node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+									bodyParser(item.body, node);
+									parentNode.addChild(node);
+								}
+								break;
+							case "ClassDeclaration":
+								break;
+							case "ImportDeclaration":
+								specifiersParser(item.specifiers, parentNode);
+								break;
+							case "ExportDefaultDeclaration":
+								break;
+							case "ExportNamedDeclaration":
+								break;
+							case "ExportAllDeclaration":
+								break;
+							
+							case "BlockStatement":
+								break;
+							case "ExpressionStatement":
+								break;
+							case "ReturnStatement":
+								break;
+						}
+					});
+				}
+
+				function declaratorParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						let name = "", 
+							kind = "", 
+							node = null;
+						switch(item.type){
+							case "VariableDeclarator":
+								name = idOrKeyOrParamParser(item.id);
+								kind = expressionOrValueParser(item.init);
+						}
+						if(name && kind && parentNode){
+							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+							expressionOrValueParser(item.init, node);
+							parentNode.addChild(node);
+						}
+					});
+				}
+
+				function idOrKeyOrParamParser (obj) {
+					obj = obj || {};
+					let name = "";
+					switch(obj.type){
+						case "Identifier":
+							name = obj.name;
+							break;
+						case "AssignmentPattern":
+							name = idOrKeyOrParamParser(obj.left);
+							//obj.right
+					}
+					return name;
+				}
+
+				function expressionOrValueParser (obj, parentNode) {
+					obj = obj || {};
+					let kind = vscode.SymbolKind.Variable;
+					switch(obj.type){
+						case "Literal":
+							//obj.value
+							//obj.raw
+							break;
+						case "Identifier":
+							//obj.name
+							break;
+						case "ArrayExpression":
+							//obj.elements
+							kind = vscode.SymbolKind.Array;
+							break;
+						case "ObjectExpression":
+							kind = vscode.SymbolKind.Object;
+							if(parentNode){
+								propertyParser(obj.properties, parentNode);
+							}
+							break;
+						case "FunctionExpression":
+							//let name = idOrKeyOrParamParser(item.id);
+							//let params = paramsParser(item.params);
+							//bodyParser(item.body);
+							kind = vscode.SymbolKind.Function;
+							if(parentNode){
+								bodyParser(obj.body, parentNode);
+							}
+							break;
+					}
+					return kind;
+				}
+
+				function propertyParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						let name = "",
+							kind = vscode.SymbolKind.Variable,
+							node = null;
+						switch(item.type){
+							case "Property":
+								name = idOrKeyOrParamParser(item.key);
+								kind = expressionOrValueParser(item.value);
+						}
+						if(name && kind && parentNode){
+							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+							expressionOrValueParser(item.value, node);
+							parentNode.addChild(node);
+						}
+					});
+				}
+
+				function paramsParser (arr) {
+					arr = arr || [];
+					let names = [];
+					_.each(arr, item => {
+						let name =idOrKeyOrParamParser(item);
+						names.push(name);
+					});
+					return names;
+				}
+
+				function bodyParser (obj, parentNode) {
+					obj = obj || {};
+					switch(obj.type){
+						case "BlockStatement":
+							declarationParser(obj.body, parentNode);
+					}
+				}
+				
+				function specifiersParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						let name = "",
+							kind = vscode.SymbolKind.Module,
+							node = null;
+						switch(item.type){
+							case "ImportDefaultSpecifier":
+							case "ImportNamespaceSpecifier":
+								name = idOrKeyOrParamParser(item.local);
+								break;
+							case "ImportSpecifier":
+								name = idOrKeyOrParamParser(item.imported);
+								kind = vscode.SymbolKind.Variable;
+								break;
+						}
+						if(name && kind && parentNode){
+							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+							parentNode.addChild(node);
+						}
+					});
+				}
 				console.log(ast.body)
 			}
-		}
+		}console.log(tree)
 		this.tree = tree;
 	}
 
