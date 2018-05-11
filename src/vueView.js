@@ -135,7 +135,7 @@ class SymbolOutlineTreeDataProvider {
 			let symbols = await this.getSymbols(editor.document);
 			if (optsTopLevel.indexOf(-1) < 0) {
 				symbols = symbols.filter(sym => optsTopLevel.indexOf(sym.kind) >= 0);
-			}console.log(vscode)
+			}
 			const symbolNodes = symbols.map(symbol => new SymbolNode(symbol));
 			symbolNodes.sort(this.compareSymbols);
 			let potentialParents = [];
@@ -174,6 +174,8 @@ class SymbolOutlineTreeDataProvider {
 
 	async updateSymbolsBySelf (editor) {
 		const tree = new SymbolNode();
+		const oldTree = this.tree || tree;
+
 		this.editor = editor;
 		if(editor && editor.document.languageId == "vue"){
 			readOpts();
@@ -190,7 +192,7 @@ class SymbolOutlineTreeDataProvider {
 			//symbol结构
 			//let symbol = new vscode.SymbolInformation("aaa", vscode.SymbolKind.Method, "script", new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6))))
 			let parentNode = null;
-			if(_.isArray(tree.children) && tree.children[0]){//children[0]是script标签
+			if(tree.children.length){//children[0]是script标签
 				parentNode = tree.children[0];
 			}else{
 				parentNode = tree;
@@ -210,158 +212,80 @@ class SymbolOutlineTreeDataProvider {
 					try{
 						ast = acorn.parse(scriptText,{
 							sourceType: 'module',
-							ranges: true
+							ranges: true,
+							ecmaVersion: 9
 						})
 					}catch(e){
-						console.log(e)
+						//console.log(e)
 					}
 					return false;
 				}
 			});
 			if(ast){
 				let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6)));
-				/*
-				_.each(ast.body, item => {
-					switch(item.type){
-						case "VariableDeclaration":
-							_.each(item.declarations, item2 => {
-								if(item2.type == "VariableDeclarator"){
-									if(item2.id){
-										if(item2.id.type == "Identifier"){
-											let name = item2.id.name,
-												kind = vscode.SymbolKind.Variable;
-											let symbol = null,
-												symbolNode = null;
-											
-
-											//判断值类型
-											switch(item2.init.type){
-												case "Literal": //字面量
-												case "Identifier": //变量
-													kind = vscode.SymbolKind.Variable;
-													break;
-												case "ArrayExpression": //数组
-													kind = vscode.SymbolKind.Array;
-													break;
-												case "ObjectExpression": //对象
-													kind = vscode.SymbolKind.Object;
-													symbol = new vscode.SymbolInformation(name, kind, "script", position)
-													symbolNode = new SymbolNode(symbol);
-													_.each(item2.init.properties, item3 => {
-														if(item3.type == "Property"){
-															let keyName = item3.key.name,
-																keyKind = vscode.SymbolKind.Variable,
-																childSymbol = null,
-																childSymbolNode = null;
-															switch(item3.value.type){
-																case "Literal": //字面量
-																case "Identifier": //变量
-																	keyKind = vscode.SymbolKind.Variable;
-																	break;
-															}
-															childSymbol = new vscode.SymbolInformation(keyName, keyKind, name, position)
-															childSymbolNode = new SymbolNode(childSymbol);
-															symbolNode.addChild(childSymbolNode);
-														}
-													});
-													break;
-												case "FunctionExpression": //函数
-													kind = vscode.SymbolKind.Function;
-													break;
-											}
-											
-											if(!symbolNode){
-												symbol = new vscode.SymbolInformation(name, kind, "script", position)
-												symbolNode = new SymbolNode(symbol);
-											}
-											scriptSymbolNode && scriptSymbolNode.addChild(symbolNode);
-										}
-									}
-								}
-							});
-							break;
-						case "ExportDefaultDeclaration":
-							if(item.declaration){
-								switch(item.declaration.type){
-									case "ObjectExpression":
-										let kind = vscode.SymbolKind.Object;
-										let symbol = new vscode.SymbolInformation("export.default", kind, "script", position)
-										let symbolNode = new SymbolNode(symbol);
-
-										_.each(item.declaration.properties, item2 => {
-											if(item2.type == "Property"){
-												let keyName = item2.key.name,
-													keyKind = vscode.SymbolKind.Variable,
-													childSymbol = null,
-													childSymbolNode = null;
-												switch(item2.value.type){
-													case "Literal": //字面量
-													case "Identifier": //变量
-														keyKind = vscode.SymbolKind.Variable;
-														break;
-												}
-												childSymbol = new vscode.SymbolInformation(keyName, keyKind, name, position)
-												childSymbolNode = new SymbolNode(childSymbol);
-												symbolNode.addChild(childSymbolNode);
-											}
-										});
-
-
-										scriptSymbolNode && scriptSymbolNode.addChild(symbolNode);
-
-								}
-							}
-							break;
-					}
-				});
-				*/
 
 				declarationParser(ast.body, parentNode);
 
-				function declarationParser (arr, parentNode) {
+				function declarationParser (arr, parentNode, nameForExport) {
 					arr = arr || [];
 					_.each(arr, item => {
-						//console.log("item.type: ", item.type);
-						//console.log(item)
+						let name = "";
+						let kind = "";
+						let node = null;
 						switch(item.type){
 							case "VariableDeclaration":
 								//console.log(item.kind) // "var" | "let" | "const"
-								declaratorParser(item.declarations, parentNode);
+								declaratorParser(item.declarations, parentNode, nameForExport);
 								break;
 							case "FunctionDeclaration":
-								//expressionOrValueParser(item, parentNode);
-								let name = idOrKeyOrParamParser(item.id);
-								let kind = vscode.SymbolKind.Function;
-								let node = null;
-								if(name && kind && parentNode){
-									node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
-									bodyParser(item.body, node);
-									parentNode.addChild(node);
+								name = idOrKeyOrParamParser(item.id);
+								if(nameForExport && nameForExport.indexOf("${name}") >= 0){
+									name = nameForExport.replace("${name}", name);
 								}
+								kind = vscode.SymbolKind.Function;
 								break;
 							case "ClassDeclaration":
+								//item.superClass
+								name = idOrKeyOrParamParser(item.id);
+								if(nameForExport && nameForExport.indexOf("${name}") >= 0){
+									name = nameForExport.replace("${name}", name);
+								}
+								kind = vscode.SymbolKind.Class;
 								break;
+
 							case "ImportDeclaration":
 								specifiersParser(item.specifiers, parentNode);
 								break;
 							case "ExportDefaultDeclaration":
+								name = "export.default";
+								kind = expressionOrValueParser(item.declaration)
 								break;
 							case "ExportNamedDeclaration":
+								declarationParser([item.declaration], parentNode, "export.${name}");
 								break;
 							case "ExportAllDeclaration":
 								break;
 							
-							case "BlockStatement":
-								break;
 							case "ExpressionStatement":
+								expressionOrValueParser(item.expression, parentNode);
 								break;
 							case "ReturnStatement":
+								expressionOrValueParser(item.argument, parentNode);
 								break;
+						}
+						if(name && kind && parentNode){
+							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+							if(item.body){
+								bodyParser(item.body, node);
+							}else if(item.declaration){
+								expressionOrValueParser(item.declaration, node);
+							}
+							parentNode.addChild(node);
 						}
 					});
 				}
 
-				function declaratorParser (arr, parentNode) {
+				function declaratorParser (arr, parentNode, nameForExport) {
 					arr = arr || [];
 					_.each(arr, item => {
 						let name = "", 
@@ -370,6 +294,9 @@ class SymbolOutlineTreeDataProvider {
 						switch(item.type){
 							case "VariableDeclarator":
 								name = idOrKeyOrParamParser(item.id);
+								if(nameForExport && nameForExport.indexOf("${name}") >= 0){
+									name = nameForExport.replace("${name}", name);
+								}
 								kind = expressionOrValueParser(item.init);
 						}
 						if(name && kind && parentNode){
@@ -384,6 +311,9 @@ class SymbolOutlineTreeDataProvider {
 					obj = obj || {};
 					let name = "";
 					switch(obj.type){
+						case "Literal":
+							name = obj.value;
+							break;
 						case "Identifier":
 							name = obj.name;
 							break;
@@ -412,7 +342,7 @@ class SymbolOutlineTreeDataProvider {
 						case "ObjectExpression":
 							kind = vscode.SymbolKind.Object;
 							if(parentNode){
-								propertyParser(obj.properties, parentNode);
+								propertyOrClassBodyParser(obj.properties, parentNode);
 							}
 							break;
 						case "FunctionExpression":
@@ -421,14 +351,28 @@ class SymbolOutlineTreeDataProvider {
 							//bodyParser(item.body);
 							kind = vscode.SymbolKind.Function;
 							if(parentNode){
+								/*
+								if(!name){
+									name = "<function>";
+									if(obj.id){
+										name = idOrKeyOrParamParser(obj.id);
+									}
+									let node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+									parentNode.addChild(node);
+									parentNode = node;
+								}*/
 								bodyParser(obj.body, parentNode);
 							}
+							break;
+						case "CallExpression":
+							expressionOrValueParser(obj.callee, parentNode);
+							//console.log(obj)
 							break;
 					}
 					return kind;
 				}
 
-				function propertyParser (arr, parentNode) {
+				function propertyOrClassBodyParser (arr, parentNode) {
 					arr = arr || [];
 					_.each(arr, item => {
 						let name = "",
@@ -436,6 +380,9 @@ class SymbolOutlineTreeDataProvider {
 							node = null;
 						switch(item.type){
 							case "Property":
+								name = idOrKeyOrParamParser(item.key);
+								kind = expressionOrValueParser(item.value);
+							case "MethodDefinition":
 								name = idOrKeyOrParamParser(item.key);
 								kind = expressionOrValueParser(item.value);
 						}
@@ -462,6 +409,10 @@ class SymbolOutlineTreeDataProvider {
 					switch(obj.type){
 						case "BlockStatement":
 							declarationParser(obj.body, parentNode);
+							break;
+						case "ClassBody":
+							propertyOrClassBodyParser(obj.body, parentNode);
+							break;
 					}
 				}
 				
@@ -487,10 +438,15 @@ class SymbolOutlineTreeDataProvider {
 						}
 					});
 				}
-				console.log(ast.body)
+				//console.log(ast.body)
 			}
-		}console.log(tree)
-		this.tree = tree;
+		}
+		if(tree.children.length){
+			this.tree = tree;
+		}else{
+			this.tree = oldTree;
+		}
+		
 	}
 
 
