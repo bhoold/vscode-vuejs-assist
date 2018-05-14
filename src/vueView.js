@@ -75,7 +75,7 @@ class SymbolOutlineTreeDataProvider {
 			return element.children;
 		}else{
 			//await this.updateSymbols(vscode.window.activeTextEditor);
-			await this.updateSymbolsBySelf(vscode.window.activeTextEditor);
+			await this.updateSymbolsByParser(vscode.window.activeTextEditor);
 			return this.tree ? this.tree.children : [];
 		}
 	}
@@ -173,7 +173,7 @@ class SymbolOutlineTreeDataProvider {
 		}
 	}
 
-	async updateSymbolsBySelf (editor) {
+	async updateSymbolsByParser (editor) {
 		const tree = new SymbolNode();
 		const oldTree = this.tree || tree;
 
