@@ -136,6 +136,7 @@ class SymbolOutlineTreeDataProvider {
 			if (optsTopLevel.indexOf(-1) < 0) {
 				symbols = symbols.filter(sym => optsTopLevel.indexOf(sym.kind) >= 0);
 			}
+
 			const symbolNodes = symbols.map(symbol => new SymbolNode(symbol));
 			symbolNodes.sort(this.compareSymbols);
 			let potentialParents = [];
@@ -180,19 +181,35 @@ class SymbolOutlineTreeDataProvider {
 		if(editor && editor.document.languageId == "vue"){
 			readOpts();
 			let symbols = await this.getSymbols(editor.document);
+			if (optsTopLevel.indexOf(-1) < 0) {
+				symbols = symbols.filter(sym => optsTopLevel.indexOf(sym.kind) >= 0);
+			}
 
-			_.each(symbols, item => {
-				if(item.name == "script"){
-					let symbolNode = new SymbolNode(item);
-					tree.addChild(symbolNode);
-					return false;
+			const symbolNodes = symbols.map(symbol => new SymbolNode(symbol));
+			symbolNodes.sort(this.compareSymbols);
+			let potentialParents = [];
+			symbolNodes.forEach(currentNode => {
+				potentialParents = potentialParents
+				.filter(node => node !== currentNode && node.symbol.location.range.contains(currentNode.symbol.location.range))
+				.sort(this.compareSymbols);
+				if(!potentialParents.length){
+					tree.addChild(currentNode);
+				}else{
+					const parent = potentialParents[potentialParents.length - 1];
+					parent.addChild(currentNode);
 				}
+				potentialParents.push(currentNode);
 			});
 
 			let parentNode = null;
-			if(tree.children.length){//children[0]是script标签
-				parentNode = tree.children[0];
-			}else{
+			_.each(tree.children, item => {
+				if(item.symbol.name == "script"){
+					parentNode = item;
+					item.children = [];
+					return false;
+				}
+			});
+			if(parentNode == null){
 				parentNode = tree;
 			}
 			
@@ -201,7 +218,6 @@ class SymbolOutlineTreeDataProvider {
 			let scriptSymbol = null;
 			let scriptText = "";
 			let ast = null;
-			
 			_.each(symbols, item => {
 				if(item.name == "script"){
 					scriptSymbol = item;
@@ -444,6 +460,9 @@ class SymbolOutlineTreeDataProvider {
 			}
 		}
 		if(tree.children.length){
+			if (optsDoSort) {
+				tree.sort();
+			}
 			this.tree = tree;
 		}else{
 			this.tree = oldTree;
