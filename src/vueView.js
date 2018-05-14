@@ -189,8 +189,6 @@ class SymbolOutlineTreeDataProvider {
 				}
 			});
 
-			//symbol结构
-			//let symbol = new vscode.SymbolInformation("aaa", vscode.SymbolKind.Method, "script", new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6))))
 			let parentNode = null;
 			if(tree.children.length){//children[0]是script标签
 				parentNode = tree.children[0];
@@ -213,17 +211,16 @@ class SymbolOutlineTreeDataProvider {
 						ast = acorn.parse(scriptText,{
 							sourceType: 'module',
 							ranges: true,
+							locations: true,
 							ecmaVersion: 9
-						})
+						});
 					}catch(e){
-						//console.log(e)
+						console.log(e)
 					}
 					return false;
 				}
 			});
 			if(ast){
-				let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(5,5), new vscode.Position(5,6)));
-
 				declarationParser(ast.body, parentNode);
 
 				function declarationParser (arr, parentNode, nameForExport) {
@@ -274,6 +271,7 @@ class SymbolOutlineTreeDataProvider {
 								break;
 						}
 						if(name && kind && parentNode){
+							let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
 							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
 							if(item.body){
 								bodyParser(item.body, node);
@@ -300,6 +298,7 @@ class SymbolOutlineTreeDataProvider {
 								kind = expressionOrValueParser(item.init);
 						}
 						if(name && kind && parentNode){
+							let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.start.column)));
 							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
 							expressionOrValueParser(item.init, node);
 							parentNode.addChild(node);
@@ -365,6 +364,7 @@ class SymbolOutlineTreeDataProvider {
 							}
 							break;
 						case "CallExpression":
+							
 							expressionOrValueParser(obj.callee, parentNode);
 							//console.log(obj)
 							break;
@@ -387,6 +387,7 @@ class SymbolOutlineTreeDataProvider {
 								kind = expressionOrValueParser(item.value);
 						}
 						if(name && kind && parentNode){
+							let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.end.line - 1 + item.loc.end.line, item.loc.start.column)));
 							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
 							expressionOrValueParser(item.value, node);
 							parentNode.addChild(node);
@@ -433,6 +434,7 @@ class SymbolOutlineTreeDataProvider {
 								break;
 						}
 						if(name && kind && parentNode){
+							let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.start.column)));
 							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
 							parentNode.addChild(node);
 						}
