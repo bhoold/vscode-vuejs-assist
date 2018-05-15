@@ -54,10 +54,11 @@
       ],
       "editor/context": [
         {
-          "command": "vueView.revealCurrentSymbol",
+		  "command": "vueView.revealCurrentSymbol",
+		  "when": "resourceLangId == vue",
           "group": "navigation"
         }
-      ]
+	  ]
     },
     "configuration": {
       "type": "object",

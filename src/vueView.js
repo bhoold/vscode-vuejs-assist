@@ -88,15 +88,19 @@ class SymbolOutlineTreeDataProvider {
 	//继承方法
 	getTreeItem (element) {
 		const { kind } = element.symbol;
-		let treeItem = new vscode.TreeItem(element.symbol.name);
+		let collapsibleState;
+		let treeItem;
+		
 		if(element.children.length){
-			treeItem.collapsibleState =
+			collapsibleState =
 				optsExpandNodes.length && SymbolNode.shouldAutoExpand(kind)
 				? vscode.TreeItemCollapsibleState.Expanded
 				: vscode.TreeItemCollapsibleState.Collapsed;
 		}else{
-			treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
+			collapsibleState = vscode.TreeItemCollapsibleState.None;
 		}
+
+		treeItem = new vscode.TreeItem(element.symbol.name, collapsibleState);
 
 		treeItem.command = {
 			command: "vueView.revealRange",
@@ -105,9 +109,12 @@ class SymbolOutlineTreeDataProvider {
 		};
 
 		treeItem.iconPath = icons.getIcon(kind, this.context);
+
+		//treeItem.tooltip = "sdfgsdf";
 		return treeItem;
 	}
 
+	//刷新vue view
 	refresh () {
 		this._onDidChangeTreeData.fire();
 	}
@@ -159,20 +166,7 @@ class SymbolOutlineTreeDataProvider {
 		this.tree = tree;
 	}
 
-	getNodeByPosition (position) {
-		let node = this.tree;
-		while(node.children.length){
-			const matching = node.children.filter(node => node.symbol.location.range.contains(position));
-			if(!matching.length){
-				break;
-			}
-			node = matching[0];
-		}
-		if(node.symbol){
-			return node;
-		}
-	}
-
+	//使用acorn解析script内容
 	async updateSymbolsByParser (editor) {
 		const tree = new SymbolNode();
 		const oldTree = this.tree || tree;
@@ -470,6 +464,22 @@ class SymbolOutlineTreeDataProvider {
 		
 	}
 
+
+
+	//根据光标位置在vue view中显示节点
+	getNodeByPosition (position) {
+		let node = this.tree;
+		while(node.children.length){
+			const matching = node.children.filter(node => node.symbol.location.range.contains(position));
+			if(!matching.length){
+				break;
+			}
+			node = matching[0];
+		}
+		if(node.symbol){
+			return node;
+		}
+	}
 
 }
 
