@@ -75,7 +75,7 @@ class SymbolOutlineTreeDataProvider {
 			return element.children;
 		}else{
 			//await this.updateSymbols(vscode.window.activeTextEditor);
-			await this.updateSymbolsByParser(vscode.window.activeTextEditor);
+			await this.updateSymbolsByParser2(vscode.window.activeTextEditor);
 			return this.tree ? this.tree.children : [];
 		}
 	}
@@ -165,6 +165,237 @@ class SymbolOutlineTreeDataProvider {
 		}
 		this.tree = tree;
 	}
+
+
+	async updateSymbolsByParser2 (editor) {
+		const tree = new SymbolNode();
+		const oldTree = this.tree || tree;
+
+		this.editor = editor;
+		if(editor && editor.document.languageId == "vue"){
+			readOpts();
+			let symbols = await this.getSymbols(editor.document);
+			if (optsTopLevel.indexOf(-1) < 0) {
+				symbols = symbols.filter(sym => optsTopLevel.indexOf(sym.kind) >= 0);
+			}
+
+			const symbolNodes = symbols.map(symbol => new SymbolNode(symbol));
+			symbolNodes.sort(this.compareSymbols);
+			let potentialParents = [];
+			symbolNodes.forEach(currentNode => {
+				potentialParents = potentialParents
+				.filter(node => node !== currentNode && node.symbol.location.range.contains(currentNode.symbol.location.range))
+				.sort(this.compareSymbols);
+				if(!potentialParents.length){
+					tree.addChild(currentNode);
+				}else{
+					const parent = potentialParents[potentialParents.length - 1];
+					parent.addChild(currentNode);
+				}
+				potentialParents.push(currentNode);
+			});
+
+			let parentNode = null;
+			_.each(tree.children, item => {
+				if(item.symbol.name == "script"){
+					parentNode = item;
+					item.children = [];
+					return false;
+				}
+			});
+			if(parentNode == null){
+				parentNode = tree;
+			}
+			
+
+			//使用acorn解析
+			let scriptSymbol = null;
+			let scriptText = "";
+			let ast = null;
+			_.each(symbols, item => {
+				if(item.name == "script"){
+					scriptSymbol = item;
+					scriptText = editor.document.getText(item.location.range);
+					scriptText = scriptText.slice(scriptText.indexOf('>') + 1, scriptText.lastIndexOf('</'));
+					try{
+						ast = acorn.parse(scriptText,{
+							sourceType: 'module',
+							ranges: true,
+							locations: true,
+							ecmaVersion: 9
+						});
+					}catch(e){
+						console.log(e)
+					}
+					return false;
+				}
+			});
+			if(ast){
+				declarationParser(ast.body, parentNode);
+
+				function declarationParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						//console.log(item)
+
+						switch(item.type){
+							case "FunctionDeclaration":
+								let kind = vscode.SymbolKind.Function;
+								let isAsync = item.async;
+								let name = getName(item.id);
+								let param = getParams(item.params);
+								let returnVal = getReturnVal(item.body);
+								let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
+								let symbName = (isAsync ? "[async] " : "") + `${name} (${param})` + (returnVal == "void" ? "" : `: ${returnVal}`);
+								let node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+								//bodyParser(item.body, node);
+								parentNode.addChild(node);
+								break;
+						}
+					});
+				}
+
+				function getName (obj) {
+					obj = obj || {};
+					let name = "";
+					switch(obj.type){
+						case "Literal":
+							name = obj.value;
+							break;
+						case "Identifier":
+							name = obj.name;
+							break;
+						case "AssignmentPattern":
+							name = getName(obj.left);
+							//obj.right
+					}
+					return name;
+				}
+
+				function getParams (arr) {
+					arr = arr || [];
+					let params = [];
+					_.each(arr, item => {
+						switch(item.type){
+							case "Identifier":
+								params.push(item.name);
+								break;
+						}
+					});
+					return params.join(", ");
+				}
+
+				function getReturnVal (obj) {
+					obj = obj || {};
+					let value = "";
+					let voidVal = "[void]";
+					let multipleVal = "[multiple]";
+					let reStaArr = retStatementParser(obj);
+					if(reStaArr.length == 1){
+						value = "[" + getExpressionKind(reStaArr[0]) + "]";
+					}else if(reStaArr.length > 1){
+						value = multipleVal;
+					}else{
+						value = voidVal;
+					}
+					return value;
+				}
+
+				function getExpressionKind (obj) {
+					obj = obj || {};
+					let kind = "unknow";
+					switch(obj.type){
+						case "Literal":
+							kind = "Literal";
+							break;
+						case "Identifier":
+							kind = "Identifier"
+							break;
+						case "ArrayExpression":
+							kind = "Array";
+							break;
+						case "ObjectExpression":
+							kind = "Object";
+							break;
+						case "FunctionExpression":
+							kind = "Function";
+							break;
+					}
+					return kind;
+				}
+
+				function retStatementParser (obj) {
+					obj = obj || {};
+					let reStaArr = [];
+
+					function statementParser (arr) {
+						arr = arr || [];
+
+						let reStaArr = [];
+						_.each(arr, item => {
+							switch(item.type){
+								case "ReturnStatement":
+									reStaArr.push(item.argument);
+									break;
+								case "IfStatement":
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.consequent));
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.alternate));
+									break;
+								case "SwitchStatement":
+									_.each(item.cases, caseItem => {
+										Array.prototype.push.apply(reStaArr, statementParser(caseItem.consequent));
+									});
+									break;
+								case "TryStatement":
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.block));
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.handler.body));
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.finalizer));
+									break;
+								case "WhileStatement":
+								case "DoWhileStatement":
+								case "ForStatement":
+								case "ForInStatement":
+									Array.prototype.push.apply(reStaArr, retStatementParser(item.body));
+									break;
+							}
+						});
+						return reStaArr;
+					}
+
+					switch(obj.type){
+						case "BlockStatement":
+							reStaArr = statementParser(obj.body);
+							break;
+					}
+					return reStaArr;
+				}
+
+				function bodyParser (obj, parentNode) {
+					obj = obj || {};
+					switch(obj.type){
+						case "BlockStatement":
+							declarationParser(obj.body, parentNode);
+							break;
+						case "ClassBody":
+							//propertyOrClassBodyParser(obj.body, parentNode);
+							break;
+					}
+				}
+			}
+		}
+		if(tree.children.length){
+			if (optsDoSort) {
+				tree.sort();
+			}
+			this.tree = tree;
+		}else{
+			this.tree = oldTree;
+		}
+		
+	}
+
+
+
 
 	//使用acorn解析script内容
 	async updateSymbolsByParser (editor) {
