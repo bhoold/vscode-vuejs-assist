@@ -231,30 +231,242 @@ class SymbolOutlineTreeDataProvider {
 				}
 			});
 			if(ast){
-				declarationParser(ast.body, parentNode);
+				declarationParser(ast.body, parentNode, null);
+				console.log(ast.body)
 
-				function declarationParser (arr, parentNode) {
+				//解析语句
+				function declarationParser (arr, parentNode, context) {
 					arr = arr || [];
 					_.each(arr, item => {
-						//console.log(item)
-
+						let kind,
+							isAsync,
+							name,
+							param,
+							returnVal,
+							position,
+							symbName,
+							node,
+							superName;
 						switch(item.type){
+							case "VariableDeclaration":
+								declaratorParser(item.declarations, parentNode, context);
+								break;
 							case "FunctionDeclaration":
-								let kind = vscode.SymbolKind.Function;
-								let isAsync = item.async;
-								let name = getName(item.id);
-								let param = getParams(item.params);
-								let returnVal = getReturnVal(item.body);
-								let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
-								let symbName = (isAsync ? "[async] " : "") + `${name} (${param})` + (returnVal == "void" ? "" : `: ${returnVal}`);
-								let node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
-								//bodyParser(item.body, node);
+								kind = vscode.SymbolKind.Function;
+								isAsync = item.async;
+								name = getName(item.id);
+								param = getParams(item.params);
+								returnVal = getReturnVal(item.body);
+								position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
+								symbName = (context && context.node && context.node.type == "ExportDefaultDeclaration" ? "{export.default} " : "") + (isAsync ? "[async] " : "") + `${name} (${param})` + `: ${returnVal}`;
+								node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+								bodyParser(item.body, node, {
+									node: item,
+									parent: context
+								});
 								parentNode.addChild(node);
+								break;
+							case "ClassDeclaration":
+								kind = vscode.SymbolKind.Class;
+								name = getName(item.id);
+								superName = getName(item.superClass);
+								position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
+								symbName = (context && context.node && context.node.type == "CallExpression" ? "{scope} " : "") + `${name}` + (superName ? ` <${superName}>` : "");
+								node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+								bodyParser(item.body, node, {
+									node: item,
+									parent: context
+								});
+								parentNode.addChild(node);
+								break;
+
+							case "ImportDeclaration":
+								importParser(item.specifiers, parentNode);
+								break;
+							case "ExportDefaultDeclaration":
+								if(item.declaration.type.indexOf("Declaration") > -1){
+									declarationParser([item.declaration], parentNode, {
+										node: item,
+										parent: context
+									});
+								}else{
+									expressionParser(item.declaration, parentNode, {
+										node: item,
+										parent: context
+									});
+								}
+
+								break;
+							case "ExportNamedDeclaration":
+								
+								break;
+							case "ExportAllDeclaration":
+								break;
+
+							case "ExpressionStatement":
+								expressionParser(item.expression, parentNode, {
+									node: item,
+									parent: context
+								});
 								break;
 						}
 					});
 				}
 
+				//解析import语句
+				function importParser (arr, parentNode) {
+					arr = arr || [];
+					_.each(arr, item => {
+						let name = "",
+							kind = vscode.SymbolKind.Module,
+							node = null;
+						switch(item.type){
+							case "ImportDefaultSpecifier":
+							case "ImportNamespaceSpecifier":
+								name = getName(item.local);
+								break;
+							case "ImportSpecifier":
+								name = getName(item.imported);
+								kind = vscode.SymbolKind.Variable;
+								break;
+						}
+						if(name && kind && parentNode){
+							let position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.start.column)));
+							node = new SymbolNode(new vscode.SymbolInformation(name, kind, parentNode.symbol.name, position));
+							parentNode.addChild(node);
+						}
+					});
+				}
+
+
+				//变量解析
+				function declaratorParser (arr, parentNode, context) {
+					arr = arr || [];
+					_.each(arr, item => {
+						let kind,
+							isAsync,
+							name,
+							param,
+							returnVal,
+							position,
+							symbName,
+							node,
+							superName;
+						switch(item.type){
+							case "VariableDeclarator":
+
+								name = getName(item.id);
+								kind = getExpressionKind(item.init);
+								position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.start.line, item.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + item.loc.end.line, item.loc.end.column)));
+								symbName = `${name}`;
+
+								if(kind == "function"){
+									param = getParams(item.init.params);
+									returnVal = getReturnVal(item.init.body);
+									symbName = (isAsync ? "[async] " : "") + `${name} (${param})` + `: ${returnVal}`;
+								}
+								node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+
+								if(kind == "function"){
+									bodyParser(item.init.body, node, {
+										node: item,
+										parent: context
+									});
+								}
+
+								parentNode.addChild(node);
+						}
+
+					});
+				}
+
+				//解析表达式
+				function expressionParser (obj, parentNode, context) {
+					obj = obj || {};
+
+					let kind,
+						isAsync,
+						name,
+						param,
+						returnVal,
+						position,
+						symbName,
+						node,
+						superName,
+						isStatic;
+					switch(obj.type){
+						case "Literal":
+							if(context && context.node && context.node.type == "AssignmentExpression"){
+									name = getName(context.node.left);
+									kind = getExpressionKind(obj);
+									position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.start.line, obj.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.end.line, obj.loc.end.column)));
+									symbName = (context && context.parent && context.parent.node && context.parent.node.type == "ExportDefaultDeclaration" ? "{export.default} " : "") + `${name}`;
+									node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+									parentNode.addChild(node);
+							}
+							break;
+						case "Identifier":
+							break;
+						case "ArrayExpression":
+							break;
+						case "ObjectExpression":
+							break;
+						case "FunctionExpression":
+							kind = vscode.SymbolKind.Function;
+							isAsync = obj.async;
+							name = getName(obj.id);
+							param = getParams(obj.params);
+							returnVal = getReturnVal(obj.body);
+							position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.start.line, obj.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.end.line, obj.loc.end.column)));
+							
+							if(context && context.node && context.node.type == "MethodDefinition"){
+								name = getName(context.node.key);
+								isStatic = context.node.static;
+							}else if(context && context.node && context.node.type == "AssignmentExpression"){
+								name = getName(context.node.left);
+
+							}
+							
+							symbName = (context && context.parent && context.parent.node && context.parent.node.type == "ExportDefaultDeclaration" ? "{export.default} " : "") + (context && context.node && context.node.type == "ExportDefaultDeclaration" ? "{export.default} " : "") + (context && context.node && context.node.type == "CallExpression" ? "{scope} " : "") + (isStatic ? "[static] " : "") + (isAsync ? "[async] " : "") + `${name} (${param})` + `: ${returnVal}`;
+							node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+							bodyParser(obj.body, node, {
+								node: obj,
+								parent: context
+							});
+							parentNode.addChild(node);
+							break;
+						case "ClassExpression":
+							kind = vscode.SymbolKind.Class;
+							name = getName(obj.id);
+							superName = getName(obj.superClass);
+							position = new vscode.Location(editor.document.uri, new vscode.Range(new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.start.line, obj.loc.start.column), new vscode.Position(scriptSymbol.location.range.start.line - 1 + obj.loc.end.line, obj.loc.end.column)));
+							symbName = (context && context.node && context.node.type == "CallExpression" ? "{scope} " : "") + `${name}` + (superName ? ` <${superName}>` : "");
+							node = new SymbolNode(new vscode.SymbolInformation(symbName, kind, parentNode.symbol.name, position));
+							bodyParser(obj.body, node, {
+								node: obj,
+								parent: context
+							});
+							parentNode.addChild(node);
+							break;
+						case "CallExpression":
+							//obj.callee
+							_.each(obj.arguments, item => {
+								expressionParser(item, parentNode, {
+									node: obj,
+									parent: context
+								});
+							});
+							break;
+						case "AssignmentExpression":
+							expressionParser(obj.right, parentNode, {
+								node: obj,
+								parent: context
+							});
+							break;
+					}
+				}
+
+				//获取函数名称
 				function getName (obj) {
 					obj = obj || {};
 					let name = "";
@@ -265,6 +477,13 @@ class SymbolOutlineTreeDataProvider {
 						case "Identifier":
 							name = obj.name;
 							break;
+						case "ObjectPattern":
+							let vars = [];
+							_.each(obj.properties, item => {
+								vars.push(getName(item.key));
+							});
+							name = vars.join(", ");
+							break;
 						case "AssignmentPattern":
 							name = getName(obj.left);
 							//obj.right
@@ -272,6 +491,7 @@ class SymbolOutlineTreeDataProvider {
 					return name;
 				}
 
+				//获取函数参数
 				function getParams (arr) {
 					arr = arr || [];
 					let params = [];
@@ -285,14 +505,15 @@ class SymbolOutlineTreeDataProvider {
 					return params.join(", ");
 				}
 
+				//获取函数返回值
 				function getReturnVal (obj) {
 					obj = obj || {};
 					let value = "";
-					let voidVal = "[void]";
-					let multipleVal = "[multiple]";
+					let voidVal = "void";
+					let multipleVal = "multiple";
 					let reStaArr = retStatementParser(obj);
 					if(reStaArr.length == 1){
-						value = "[" + getExpressionKind(reStaArr[0]) + "]";
+						value = getExpressionKind(reStaArr[0]);
 					}else if(reStaArr.length > 1){
 						value = multipleVal;
 					}else{
@@ -301,36 +522,38 @@ class SymbolOutlineTreeDataProvider {
 					return value;
 				}
 
+				//获取表达式返回的类型
 				function getExpressionKind (obj) {
 					obj = obj || {};
 					let kind = "unknow";
 					switch(obj.type){
 						case "Literal":
-							kind = "Literal";
+							kind = "literal";
 							break;
 						case "Identifier":
-							kind = "Identifier"
+							kind = "identifier"
 							break;
 						case "ArrayExpression":
-							kind = "Array";
+							kind = "array";
 							break;
 						case "ObjectExpression":
-							kind = "Object";
+							kind = "object";
 							break;
 						case "FunctionExpression":
-							kind = "Function";
+							kind = "function";
 							break;
 					}
 					return kind;
 				}
 
+				//解析return语句
 				function retStatementParser (obj) {
 					obj = obj || {};
 					let reStaArr = [];
 
+					//获取条件语句和循环语句的返回值
 					function statementParser (arr) {
 						arr = arr || [];
-
 						let reStaArr = [];
 						_.each(arr, item => {
 							switch(item.type){
@@ -370,16 +593,31 @@ class SymbolOutlineTreeDataProvider {
 					return reStaArr;
 				}
 
-				function bodyParser (obj, parentNode) {
+				//解析函数定义和类定义
+				function bodyParser (obj, parentNode, context) {
 					obj = obj || {};
 					switch(obj.type){
 						case "BlockStatement":
-							declarationParser(obj.body, parentNode);
+							declarationParser(obj.body, parentNode, context);
 							break;
 						case "ClassBody":
-							//propertyOrClassBodyParser(obj.body, parentNode);
+							classBodyParser(obj.body, parentNode, context);
 							break;
 					}
+				}
+
+				function classBodyParser (arr, parentNode, context) {
+					arr = arr || [];
+					_.each(arr, item => {
+						switch(item.type){
+							case "MethodDefinition":
+								expressionParser(item.value, parentNode, {
+									node: item,
+									parent: context
+								});
+								break;
+						}
+					});
 				}
 			}
 		}
