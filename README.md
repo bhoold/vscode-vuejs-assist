@@ -1,4 +1,4 @@
-# vue-view README
+## Introduction
 
 这是一个显示vue文件代码层级结构的vscode扩展，参考了[vscode code outline](https://github.com/patrys/vscode-code-outline)的代码。
 安装成功之后，编辑vue文件时将在explorer中显示一个vue view窗口。
@@ -13,15 +13,22 @@
 
 需要[Vetur](https://marketplace.visualstudio.com/items?itemName=octref.vetur)提供vue标识符支持
 
+<!-- 
 ## Extension Settings
 
 
 
 ## Known Issues
-
+-->
 
 
 ## Release Notes
+
+### v0.0.3
+
+1.参考vscode自带的outline加上排序功能。
+2.函数显示形参。
+3.参考vue的ast解析方式优化代码。
 
 ### v0.0.2
 
