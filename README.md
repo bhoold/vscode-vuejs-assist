@@ -13,27 +13,10 @@
 
 需要[Vetur](https://marketplace.visualstudio.com/items?itemName=octref.vetur)提供vue标识符支持
 
-<!-- 
+<!--
 ## Extension Settings
 
 
 
 ## Known Issues
 -->
-
-
-## Release Notes
-
-### v0.0.3
-
-1.参考vscode自带的outline加上排序功能。
-2.函数显示形参。
-3.参考vue的ast解析方式优化代码。
-
-### v0.0.2
-
-script部分改用acorn解析
-
-### v0.0.1
-
-基本显示功能
